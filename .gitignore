@@ -1,0 +1,16 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# local secrets & runtime
+config/settings.yaml
+.env
+.env.*
+
+# local data & logs
+logs/
+data/
+learning_notes/

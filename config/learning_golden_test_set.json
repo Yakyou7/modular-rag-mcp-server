@@ -1,0 +1,36 @@
+{
+  "description": "针对 learning_docs 集合（《大语言模型应用开发技术指南》）的黄金测试集。expected_chunk_ids 为摄取后验证过的真实块 ID。",
+  "version": "1.0",
+  "test_cases": [
+    {
+      "query": "重排序有哪些方案？各自的特点是什么？",
+      "expected_chunk_ids": ["c2bca2af_0007_39458ab2"],
+      "expected_sources": [],
+      "reference_answer": "重排序是 RAG 的精排阶段，常见方案包括 Cross-Encoder Reranker 和 LLM Reranker 两种。Cross-Encoder 将查询和文档拼接后联合编码，精度高但慢；LLM Reranker 用大模型按相关性打分，灵活但成本高。"
+    },
+    {
+      "query": "什么是混合检索？为什么要把向量和关键词检索结合起来？",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "混合检索结合稠密向量检索（语义相似）与 BM25 稀疏检索（关键词精确匹配），通过 RRF 融合两路结果，兼顾同义改写与专有名词精确匹配。"
+    },
+    {
+      "query": "文档分块应该怎么切？块太大或太小有什么问题？",
+      "expected_chunk_ids": ["c2bca2af_0004_512d67fb"],
+      "expected_sources": [],
+      "reference_answer": "分块是 RAG 中决定检索质量的关键环节：块过大会导致检索噪声增加、上下文利用率下降；块过小会丢失语义上下文，影响回答连贯性。常见方法有固定长度切分、递归字符切分等。"
+    },
+    {
+      "query": "MCP 协议是什么？它解决什么问题？",
+      "expected_chunk_ids": ["c2bca2af_0008_6b3d251e"],
+      "expected_sources": [],
+      "reference_answer": "MCP（Model Context Protocol）是 Anthropic 提出的标准化 AI 模型与外部工具交互的协议，让 AI 助手能以统一方式连接外部工具和数据源。"
+    },
+    {
+      "query": "生产环境部署 RAG 要考虑什么？缓存策略怎么做？",
+      "expected_chunk_ids": ["c2bca2af_0010_6d57f8f9"],
+      "expected_sources": [],
+      "reference_answer": "生产部署需考虑服务可用性、响应延迟、数据安全和成本控制。缓存方面可采用语义缓存：将查询向量与历史查询相似度匹配，超过阈值直接返回缓存结果，避免重复的嵌入计算和 LLM 调用。"
+    }
+  ]
+}

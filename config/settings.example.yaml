@@ -1,0 +1,116 @@
+# Modular RAG MCP Server - Configuration
+# This is the main configuration file for the MCP Server.
+# Edit this file to configure LLM, Embedding, VectorStore, and other services.
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+llm:
+  # 智谱 GLM：走 OpenAI 兼容接口（provider 保持 openai，用 base_url 指向智谱）
+  provider: "openai"  # Options: openai, azure, ollama, deepseek
+  model: "glm-4-flash"  # 免费档对话模型；也可换成控制台里的其他免费模型（如 glm-4.7-flash）
+  base_url: "https://open.bigmodel.cn/api/paas/v4"
+  api_key:  "${ZHIPU_API_KEY}"
+  # 下面三行是 Azure 专用配置，用智谱时必须保持注释，否则会误入 Azure 兼容模式
+  # deployment_name: "gpt-4o"
+  # azure_endpoint: "https://YOUR_ENDPOINT.openai.azure.com/"
+  # api_version: "2024-02-15-preview"
+  temperature: 0.0
+  max_tokens: 4096
+
+# =============================================================================
+# Embedding Configuration
+# =============================================================================
+embedding:
+  # 智谱向量化模型 embedding-3（默认输出 2048 维）
+  provider: "openai"  # Options: openai, azure, ollama
+  model: "embedding-3"
+  dimensions: 2048  # 不传递给API, 仅用于验证（embedding-3 默认 2048 维）
+  base_url: "https://open.bigmodel.cn/api/paas/v4"
+  api_key:  "${ZHIPU_API_KEY}"
+  # Azure-compatible settings (azure_endpoint triggers Azure compat mode) — 智谱模式下保持注释:
+  # azure_endpoint: "https://YOUR_ENDPOINT.openai.azure.com/"
+  # deployment_name: "text-embedding-ada-002"
+  # api_version: "2024-02-15-preview"
+
+# =============================================================================
+# Vision LLM Configuration (for Image Captioning)
+# =============================================================================
+vision_llm:
+  enabled: true  # 处理 PDF 里的图片时需要；暂时不需要可改为 false
+  provider: "openai"  # Options: openai, azure, ollama
+  model: "glm-4v-flash"  # 智谱免费视觉模型；名称以控制台模型列表为准
+  max_tokens: 1024  # 视觉模型的上限就是 1024，超过会被拒绝（HTTP 400）
+  base_url: "https://open.bigmodel.cn/api/paas/v4"
+  api_key:  "${ZHIPU_API_KEY}"
+  # Azure-compatible settings (azure_endpoint triggers Azure compat mode) — 智谱模式下保持注释:
+  # azure_endpoint: "https://YOUR_ENDPOINT.openai.azure.com/"
+  # deployment_name: "gpt-4o"
+  # api_version: "2024-02-15-preview"
+  # Ollama-specific settings (if provider is ollama):
+  # base_url: "http://localhost:11434"
+  max_image_size: 2048  # Max dimension (width/height) for image compression
+
+# =============================================================================
+# Vector Store Configuration
+# =============================================================================
+vector_store:
+  provider: "chroma"  # Options: chroma, qdrant, pinecone
+  persist_directory: "./data/db/chroma"
+  collection_name: "knowledge_hub"
+
+# =============================================================================
+# Retrieval Configuration
+# =============================================================================
+retrieval:
+  dense_top_k: 20
+  sparse_top_k: 20
+  fusion_top_k: 10
+  rrf_k: 60  # RRF constant
+
+# =============================================================================
+# Rerank Configuration
+# =============================================================================
+rerank:
+  enabled: true  # 开启重排：融合后的候选交给 LLM 精排（代价：每次查询多一次 LLM 调用）
+  provider: "llm"  # Options: none, cross_encoder, llm（cross_encoder 需安装 sentence-transformers）
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  top_k: 5
+
+# =============================================================================
+# Evaluation Configuration
+# =============================================================================
+evaluation:
+  enabled: true  # 开启评估：scripts/evaluate.py 用黄金测试集量化检索质量
+  provider: "custom"  # Options: ragas, deepeval, custom（custom=轻量检索指标 hit_rate/MRR）
+  metrics:
+    - "hit_rate"
+    - "mrr"
+
+# =============================================================================
+# Observability Configuration
+# =============================================================================
+observability:
+  log_level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+  trace_enabled: true
+  trace_file: "./logs/traces.jsonl"
+  structured_logging: true
+
+# =============================================================================
+# Ingestion Configuration
+# =============================================================================
+ingestion:
+  chunk_size: 1000
+  chunk_overlap: 200
+  splitter: "recursive"  # Options: recursive, semantic, fixed_length
+  batch_size: 100
+  
+  # Chunk Refiner Configuration (C5)
+  chunk_refiner:
+    use_llm: true  # Set to true to enable LLM-based refinement (requires LLM config)
+    # When use_llm is false or LLM call fails, falls back to rule-based refinement
+  
+  # Metadata Enricher Configuration (C6)
+  metadata_enricher:
+    use_llm: true  # Set to true to enable LLM-based enrichment (requires LLM config)
+    # When use_llm is false or LLM call fails, falls back to rule-based enrichment

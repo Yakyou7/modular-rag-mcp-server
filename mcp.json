@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "modular-rag-mcp-server": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "-m",
+        "src.mcp_server.server"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}

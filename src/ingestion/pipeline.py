@@ -254,9 +254,9 @@ class IngestionPipeline:
             logger.info("\n📄 Stage 2: Document Loading")
             _notify("load", 2)
             
-            _t0 = time.monotonic()
+            _t0 = time.perf_counter()
             document = self.loader.load(str(file_path))
-            _elapsed = (time.monotonic() - _t0) * 1000.0
+            _elapsed = (time.perf_counter() - _t0) * 1000.0
             
             text_preview = document.text[:200].replace('\n', ' ') + "..." if len(document.text) > 200 else document.text
             image_count = len(document.metadata.get("images", []))
@@ -286,9 +286,9 @@ class IngestionPipeline:
             logger.info("\n✂️  Stage 3: Document Chunking")
             _notify("split", 3)
             
-            _t0 = time.monotonic()
+            _t0 = time.perf_counter()
             chunks = self.chunker.split_document(document)
-            _elapsed = (time.monotonic() - _t0) * 1000.0
+            _elapsed = (time.perf_counter() - _t0) * 1000.0
             
             logger.info(f"  Chunks generated: {len(chunks)}")
             if chunks:
@@ -323,7 +323,7 @@ class IngestionPipeline:
             
             # 4a: Chunk Refinement
             logger.info("  4a. Chunk Refinement...")
-            _t0_transform = time.monotonic()
+            _t0_transform = time.perf_counter()
             # snapshot before refinement
             _pre_refine_texts = {c.id: c.text for c in chunks}
             chunks = self.chunk_refiner.transform(chunks, trace)
@@ -349,7 +349,7 @@ class IngestionPipeline:
                 "metadata_enricher": {"llm": enriched_by_llm, "rule": enriched_by_rule},
                 "image_captioner": {"captioned_chunks": captioned}
             }
-            _elapsed_transform = (time.monotonic() - _t0_transform) * 1000.0
+            _elapsed_transform = (time.perf_counter() - _t0_transform) * 1000.0
             if trace is not None:
                 trace.record_stage("transform", {
                     "method": "refine+enrich+caption",
@@ -381,9 +381,9 @@ class IngestionPipeline:
             _notify("embed", 5)
             
             # Process through BatchProcessor
-            _t0 = time.monotonic()
+            _t0 = time.perf_counter()
             batch_result = self.batch_processor.process(chunks, trace)
-            _elapsed = (time.monotonic() - _t0) * 1000.0
+            _elapsed = (time.perf_counter() - _t0) * 1000.0
             
             dense_vectors = batch_result.dense_vectors
             sparse_stats = batch_result.sparse_stats
@@ -434,7 +434,7 @@ class IngestionPipeline:
             
             # 6a: Vector Upsert
             logger.info("  6a. Vector Storage (ChromaDB)...")
-            _t0_storage = time.monotonic()
+            _t0_storage = time.perf_counter()
             vector_ids = self.vector_upserter.upsert(chunks, dense_vectors, trace)
             logger.info(f"      Stored {len(vector_ids)} vectors")
 
@@ -474,7 +474,7 @@ class IngestionPipeline:
                 "bm25_docs": len(sparse_stats),
                 "images_indexed": len(images)
             }
-            _elapsed_storage = (time.monotonic() - _t0_storage) * 1000.0
+            _elapsed_storage = (time.perf_counter() - _t0_storage) * 1000.0
             if trace is not None:
                 # Per-chunk storage mapping: chunk_id → vector_id
                 chunk_storage = [

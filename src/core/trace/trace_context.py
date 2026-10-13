@@ -31,8 +31,8 @@ class TraceContext:
     stages: List[Dict[str, Any]] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    # internal monotonic clock for accurate elapsed calculation
-    _start_mono: float = field(default_factory=time.monotonic, repr=False)
+    # internal high-resolution clock (perf_counter) for elapsed calculation
+    _start_mono: float = field(default_factory=time.perf_counter, repr=False)
     _finish_mono: Optional[float] = field(default=None, repr=False)
     _stage_timings: Dict[str, float] = field(default_factory=dict, repr=False)
 
@@ -67,7 +67,7 @@ class TraceContext:
 
     def finish(self) -> None:
         """Mark the trace as finished and record wall-clock end time."""
-        self._finish_mono = time.monotonic()
+        self._finish_mono = time.perf_counter()
         self.finished_at = datetime.now(timezone.utc).isoformat()
 
     # ---- timing helpers -----------------------------------------------
@@ -92,7 +92,7 @@ class TraceContext:
                 raise KeyError(f"Stage '{stage_name}' has no recorded timing")
             return self._stage_timings[stage_name]
 
-        end = self._finish_mono if self._finish_mono is not None else time.monotonic()
+        end = self._finish_mono if self._finish_mono is not None else time.perf_counter()
         return (end - self._start_mono) * 1000.0
 
     # ---- serialisation ------------------------------------------------

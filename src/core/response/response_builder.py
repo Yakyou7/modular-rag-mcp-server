@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 from mcp import types
 
 from src.core.response.citation_generator import Citation, CitationGenerator
+from src.core.response.confidence import ConfidenceAssessment, RERANK_SCORE_MAX
 from src.core.types import RetrievalResult
 
 
@@ -156,30 +157,45 @@ class ResponseBuilder:
         query: str,
         collection: Optional[str] = None,
         include_images: bool = True,
+        confidence: Optional[ConfidenceAssessment] = None,
     ) -> MCPToolResponse:
         """Build MCP response from retrieval results.
-        
+
         Args:
             results: List of RetrievalResult from search.
             query: Original user query.
             collection: Optional collection name.
             include_images: Whether to include images in response (default: True).
-            
+            confidence: Optional ConfidenceAssessment from the tool layer.
+                When assessable and low, prepends a refusal banner and adds
+                confidence fields to metadata.
+
         Returns:
             MCPToolResponse with formatted content, citations, and optional images.
         """
         # Handle empty results
         if not results:
             return self._build_empty_response(query, collection)
-        
+
         # Generate citations
         citations = self.citation_generator.generate(results)
-        
+
         # Build Markdown content
         content = self._build_markdown_content(results, citations, query)
-        
+
+        # Low-confidence banner: honest refusal-style header, but still
+        # return the closest materials (never silently output weak matches).
+        if confidence is not None and confidence.low:
+            content = self._build_low_confidence_banner(confidence) + content
+
         # Build metadata
         metadata = self._build_metadata(query, collection, len(results))
+        if confidence is not None:
+            metadata["confidence_method"] = confidence.method
+            if confidence.assessable:
+                metadata["confidence"] = round(confidence.confidence, 3)
+                metadata["confidence_threshold"] = confidence.threshold
+                metadata["low_confidence"] = bool(confidence.low)
         
         # Assemble image content if enabled
         image_contents: List[types.ImageContent] = []
@@ -265,10 +281,10 @@ class ResponseBuilder:
         
         for i, (result, citation) in enumerate(zip(results[:display_count], citations[:display_count])):
             marker = self.citation_generator.format_citation_marker(citation.index)
-            
+
             # Format single result
             lines.append(f"### {marker} 结果 {citation.index}")
-            lines.append(f"**相关度:** {citation.score:.2%}")
+            lines.append(f"**{self._format_relevance(result, citation)}**")
             lines.append(f"**来源:** `{citation.source}`")
             
             if citation.page is not None:
@@ -295,6 +311,42 @@ class ResponseBuilder:
         
         return "\n".join(lines)
     
+    def _format_relevance(self, result: RetrievalResult, citation: Citation) -> str:
+        """Format a scale-aware relevance label for one result.
+
+        The rerank prompt (config/prompts/rerank.txt) scores relevance on a
+        0-3 scale, so displaying it as a percentage would show "300.00%".
+        RRF fusion scores (~1/(k+rank)) are rank-derived — shown as-is
+        rather than disguised as a relevance percentage.
+        """
+        metadata = result.metadata or {}
+        if metadata.get("reranked"):
+            raw = max(0.0, min(float(citation.score), RERANK_SCORE_MAX))
+            normalized = raw / RERANK_SCORE_MAX
+            return f"相关度: {normalized:.0%}（精排分 {raw:g}/3）"
+        return f"融合分: {citation.score:.4f}（RRF 排名分）"
+
+    def _build_low_confidence_banner(self, confidence: ConfidenceAssessment) -> str:
+        """Build the low-confidence banner prepended to the content.
+
+        Args:
+            confidence: A low, assessable ConfidenceAssessment.
+
+        Returns:
+            Markdown banner text (ends with a blank line).
+        """
+        lines = [
+            "## ⚠️ 低置信度结果（仅供参考）",
+            "",
+            (
+                f"检索系统对本次查询的把握不足：置信度 "
+                f"{confidence.confidence:.0%} 低于阈值 {confidence.threshold:.0%}。"
+            ),
+            "知识库中可能没有直接回答该问题的资料，以下是最接近的内容，请谨慎采用。",
+            "",
+        ]
+        return "\n".join(lines)
+
     def _build_metadata(
         self,
         query: str,

@@ -153,19 +153,23 @@ class RagasEvaluator(BaseEvaluator):
         contexts: List[str],
         answer: str,
     ) -> Dict[str, float]:
-        """Execute Ragas collections metrics and return normalised scores.
+        """Execute Ragas metrics and return normalised scores.
 
-        Ragas 0.4+ collections metrics use per-metric ``score()`` instead of
-        the legacy ``evaluate()`` pipeline.  Each metric has its own signature:
-        - Faithfulness / ContextPrecision: (user_input, response, retrieved_contexts)
-        - AnswerRelevancy: (user_input, response)
+        Version-aware: the project pins ``ragas<0.4``, whose stable API is
+        the batch ``evaluate()`` pipeline over a ``datasets.Dataset``.  The
+        ragas 0.4+ collections API (per-metric ``score()``) is used when
+        available so a future unpin keeps working.
         """
-        from ragas.metrics.collections import (
-            Faithfulness,
-            AnswerRelevancy,
-            ContextPrecisionWithoutReference,
-        )
+        try:
+            from ragas.metrics.collections import (  # noqa: F401
+                AnswerRelevancy,
+                ContextPrecisionWithoutReference,
+                Faithfulness,
+            )
+        except ImportError:
+            return self._run_ragas_legacy(query, contexts, answer)
 
+        # ── ragas 0.4+ path ──
         # Build LLM / Embedding wrappers from settings
         llm, embeddings = self._build_wrappers()
 
@@ -191,6 +195,94 @@ class RagasEvaluator(BaseEvaluator):
             scores[metric_name] = float(result.value) if result.value is not None else 0.0
 
         return scores
+
+    def _run_ragas_legacy(
+        self,
+        query: str,
+        contexts: List[str],
+        answer: str,
+    ) -> Dict[str, float]:
+        """Execute Ragas via the ragas 0.3.x ``evaluate()`` batch API.
+
+        Uses Langchain wrappers so that OpenAI-compatible endpoints
+        (e.g. 智谱 GLM) work: ``base_url`` must be forwarded from settings,
+        otherwise requests silently hit the default OpenAI endpoint.
+        """
+        from datasets import Dataset
+        from ragas import evaluate as ragas_evaluate
+        from ragas.embeddings import LangchainEmbeddingsWrapper
+        from ragas.llms import LangchainLLMWrapper
+        from ragas.metrics import (
+            answer_relevancy as ragas_answer_relevancy,
+            context_precision as ragas_context_precision,
+            faithfulness as ragas_faithfulness,
+        )
+
+        metric_map = {
+            FAITHFULNESS: ragas_faithfulness,
+            ANSWER_RELEVANCY: ragas_answer_relevancy,
+            CONTEXT_PRECISION: ragas_context_precision,
+        }
+        metrics = [metric_map[name] for name in self._metric_names if name in metric_map]
+        if not metrics:
+            raise ValueError(
+                f"No runnable ragas metrics among: {', '.join(self._metric_names)}"
+            )
+
+        llm, embeddings = self._build_wrappers_langchain()
+
+        dataset = Dataset.from_dict({
+            "question": [query],
+            "answer": [answer],
+            "contexts": [contexts],
+        })
+
+        result = ragas_evaluate(dataset, metrics=metrics, llm=llm, embeddings=embeddings)
+        df = result.to_pandas()
+
+        scores: Dict[str, float] = {}
+        for name in self._metric_names:
+            if name in df.columns:
+                value = df[name].iloc[0]
+                # NaN guard: ragas yields NaN when a metric cannot be judged
+                scores[name] = float(value) if value == value else 0.0
+        return scores
+
+    def _build_wrappers_langchain(self) -> tuple:
+        """Build Langchain-style Ragas wrappers (ragas 0.3.x path).
+
+        Forwards ``base_url`` from settings so OpenAI-compatible providers
+        (Azure compat / 智谱 / DeepSeek) are reachable.  For embeddings,
+        disables local token-length checking — tiktoken has no vocabulary
+        for non-OpenAI embedding models and would raise on encode.
+
+        Returns:
+            Tuple of (LangchainLLMWrapper, LangchainEmbeddingsWrapper).
+        """
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        from ragas.embeddings import LangchainEmbeddingsWrapper
+        from ragas.llms import LangchainLLMWrapper
+
+        if self.settings is None:
+            raise ValueError("Settings required to create LLM for Ragas evaluation")
+
+        llm_cfg = self.settings.llm
+        llm = LangchainLLMWrapper(ChatOpenAI(
+            model=llm_cfg.model,
+            api_key=llm_cfg.api_key,
+            base_url=getattr(llm_cfg, "base_url", None),
+            temperature=0.0,
+        ))
+
+        emb_cfg = self.settings.embedding
+        embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings(
+            model=emb_cfg.model,
+            api_key=emb_cfg.api_key,
+            base_url=getattr(emb_cfg, "base_url", None),
+            check_embedding_ctx_length=False,
+        ))
+
+        return llm, embeddings
 
     def _build_wrappers(self) -> tuple:
         """Build Ragas LLM and Embedding wrappers from project settings.
@@ -227,7 +319,12 @@ class RagasEvaluator(BaseEvaluator):
                 api_version=getattr(llm_cfg, "api_version", None) or "2024-02-15-preview",
             )
         elif provider == "openai":
-            llm_client = AsyncOpenAI(api_key=llm_cfg.api_key)
+            # base_url must be forwarded for OpenAI-compatible providers
+            # (智谱 GLM etc.) — otherwise requests hit api.openai.com.
+            llm_client = AsyncOpenAI(
+                api_key=llm_cfg.api_key,
+                base_url=getattr(llm_cfg, "base_url", None),
+            )
         else:
             raise ValueError(
                 f"Unsupported LLM provider for Ragas: '{provider}'. "
@@ -254,7 +351,10 @@ class RagasEvaluator(BaseEvaluator):
                 api_version=getattr(emb_cfg, "api_version", None) or "2024-02-15-preview",
             )
         elif emb_provider == "openai":
-            emb_client = AsyncOpenAI(api_key=emb_cfg.api_key)
+            emb_client = AsyncOpenAI(
+                api_key=emb_cfg.api_key,
+                base_url=getattr(emb_cfg, "base_url", None),
+            )
         else:
             raise ValueError(
                 f"Unsupported embedding provider for Ragas: '{emb_provider}'. "

@@ -289,9 +289,12 @@ class TestResponseBuilder:
             results=sample_retrieval_results,
             query="Azure",
         )
-        
-        # Should contain score indicators
-        assert "相关度" in response.content or "95%" in response.content
+
+        # Non-reranked results carry RRF fusion scores — displayed as
+        # fusion scores, not disguised as relevance percentages.
+        assert "融合分" in response.content
+        assert "RRF 排名分" in response.content
+        assert "300.00%" not in response.content
     
     def test_response_to_dict(
         self,

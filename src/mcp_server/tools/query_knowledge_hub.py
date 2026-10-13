@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from mcp import types
 
 from src.core.response.response_builder import ResponseBuilder, MCPToolResponse
+from src.core.response.confidence import ConfidenceAssessment, assess_confidence
 from src.core.settings import load_settings, resolve_path, Settings
 from src.core.trace import TraceContext, TraceCollector
 from src.core.types import RetrievalResult
@@ -37,8 +38,13 @@ logger = logging.getLogger(__name__)
 TOOL_NAME = "query_knowledge_hub"
 TOOL_DESCRIPTION = """Search the knowledge base for relevant documents.
 
-This tool uses hybrid search (semantic + keyword) to find the most relevant 
-documents matching your query. Results include source citations for reference.
+This tool uses hybrid search (semantic + keyword) to find the most relevant
+documents matching your query. Results include structured citations
+(chunk_id, source, page, score) in a "References (JSON)" block.
+
+When the reranker marks the top result below the confidence threshold, the
+response metadata carries low_confidence=true and the content is prefixed
+with a low-confidence warning — treat those results as unverified leads.
 
 Parameters:
 - query: Your search question or keywords
@@ -78,11 +84,16 @@ class QueryKnowledgeHubConfig:
         max_top_k: Maximum allowed top_k value
         default_collection: Default collection if not specified
         enable_rerank: Whether to apply reranking
+        confidence_enabled: Whether to assess response confidence (falls
+            back to settings.response when available)
+        confidence_threshold: Low-confidence threshold on normalised 0-1 scale
     """
     default_top_k: int = 5
     max_top_k: int = 20
     default_collection: str = "default"
     enable_rerank: bool = True
+    confidence_enabled: bool = True
+    confidence_threshold: float = 0.5
 
 
 class QueryKnowledgeHubTool:
@@ -203,13 +214,26 @@ class QueryKnowledgeHubTool:
             vector_store=vector_store,
         )
         sparse_retriever.default_collection = collection
-        
+
+        # Optional third recall path (GraphRAG-style): attach when enabled;
+        # missing/empty graph index degrades to dense+sparse silently.
+        try:
+            from src.core.query_engine.graph_retriever import create_graph_retriever
+
+            graph_retriever = create_graph_retriever(
+                self.settings, collection, vector_store=vector_store,
+            )
+        except Exception as exc:
+            logger.warning(f"Graph retriever unavailable, continuing without: {exc}")
+            graph_retriever = None
+
         query_processor = QueryProcessor()
         self._hybrid_search = create_hybrid_search(
             settings=self.settings,
             query_processor=query_processor,
             dense_retriever=dense_retriever,
             sparse_retriever=sparse_retriever,
+            graph_retriever=graph_retriever,
         )
         
         self._current_collection = collection
@@ -262,9 +286,9 @@ class QueryKnowledgeHubTool:
             # Run blocking I/O (embedding API, ChromaDB, BM25) in a thread
             # to avoid blocking the async event loop / MCP stdio transport
             import time as _time
-            _init_t0 = _time.monotonic()
+            _init_t0 = _time.perf_counter()
             await asyncio.to_thread(self._ensure_initialized, effective_collection)
-            _init_elapsed = (_time.monotonic() - _init_t0) * 1000.0
+            _init_elapsed = (_time.perf_counter() - _init_t0) * 1000.0
             trace.record_stage("initialization", {
                 "collection": effective_collection,
                 "cold_start": _init_elapsed > 500,  # >500ms ≈ cold
@@ -280,12 +304,23 @@ class QueryKnowledgeHubTool:
                 results = await asyncio.to_thread(
                     self._apply_rerank, query, results, effective_top_k, trace,
                 )
-            
+
+            # Assess confidence (only meaningful on successfully reranked
+            # results — see src/core/response/confidence.py)
+            confidence = assess_confidence(
+                results,
+                threshold=self._confidence_threshold(),
+                enabled=self._confidence_enabled(),
+            )
+            trace.metadata["confidence"] = confidence.confidence
+            trace.metadata["low_confidence"] = confidence.low
+
             # Build response
             response = self._response_builder.build(
                 results=results,
                 query=query,
                 collection=effective_collection,
+                confidence=confidence,
             )
             
             # Store final results in trace for dashboard display
@@ -388,6 +423,20 @@ class QueryKnowledgeHubTool:
             logger.warning(f"Reranking failed, using original order: {e}")
             return results[:top_k]
     
+    def _confidence_enabled(self) -> bool:
+        """Resolve confidence switch: settings.response overrides defaults."""
+        response_cfg = getattr(self.settings, "response", None)
+        if response_cfg is not None and getattr(response_cfg, "confidence_enabled", None) is not None:
+            return bool(response_cfg.confidence_enabled)
+        return self.config.confidence_enabled
+
+    def _confidence_threshold(self) -> float:
+        """Resolve confidence threshold: settings.response overrides defaults."""
+        response_cfg = getattr(self.settings, "response", None)
+        if response_cfg is not None and getattr(response_cfg, "confidence_threshold", None) is not None:
+            return float(response_cfg.confidence_threshold)
+        return self.config.confidence_threshold
+
     def _build_error_response(
         self,
         query: str,

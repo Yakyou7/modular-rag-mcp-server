@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
 
+from src.core.response.confidence import RERANK_SCORE_MAX
 from src.core.types import RetrievalResult
 
 
@@ -129,6 +130,18 @@ class CitationGenerator:
         for field_name in self.include_metadata_fields:
             if field_name in metadata and field_name not in ("source_path", "page", "page_num"):
                 extra_metadata[field_name] = metadata[field_name]
+
+        # Score scale annotation for machine consumers: after a successful
+        # LLM rerank, ``score`` is on the 0-3 relevance scale from
+        # config/prompts/rerank.txt. Expose the normalised 0-1 value so
+        # agents don't misread 3 as "300% relevant" or 0.03 (RRF) as "3%".
+        if metadata.get("reranked"):
+            try:
+                raw = max(0.0, min(float(result.score), RERANK_SCORE_MAX))
+                extra_metadata["rerank_scale"] = "0-3"
+                extra_metadata["relevance_normalized"] = round(raw / RERANK_SCORE_MAX, 3)
+            except (TypeError, ValueError):
+                pass
         
         return Citation(
             index=index,

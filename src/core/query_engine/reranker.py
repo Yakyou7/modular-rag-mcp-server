@@ -284,14 +284,14 @@ class CoreReranker:
         # Attempt reranking
         try:
             logger.debug(f"Reranking {len(candidates)} candidates with {self._reranker_type}")
-            _t0 = time.monotonic()
+            _t0 = time.perf_counter()
             reranked_candidates = self._reranker.rerank(
                 query=query,
                 candidates=candidates,
                 trace=trace,
                 **kwargs,
             )
-            _elapsed = (time.monotonic() - _t0) * 1000.0
+            _elapsed = (time.perf_counter() - _t0) * 1000.0
             
             # Convert back to RetrievalResult
             reranked_results = self._candidates_to_results(reranked_candidates, results)

@@ -170,6 +170,41 @@ class VisionLLMSettings:
 
 
 @dataclass(frozen=True)
+class ResponseSettings:
+    """Response formatting configuration for MCP tools.
+
+    Attributes:
+        confidence_enabled: Whether to derive a confidence signal from
+            reranked results (see src/core/response/confidence.py).
+        confidence_threshold: Low-confidence threshold on the normalised
+            0-1 scale. Below it, the tool flags `low_confidence` in the
+            response metadata and prepends a refusal banner.
+    """
+    confidence_enabled: bool
+    confidence_threshold: float
+
+
+@dataclass(frozen=True)
+class GraphSettings:
+    """Lightweight GraphRAG configuration.
+
+    Attributes:
+        enabled: Master switch. When on, the query layer attaches a
+            GraphRetriever as a third recall path fused via RRF; a missing
+            or empty index degrades gracefully (no graph path).
+        storage_dir: Directory holding per-collection SQLite graph files
+            (``{collection}_graph.sqlite3``).
+        top_k: Max chunks returned by the graph path per query.
+        max_hops: Entity expansion depth (1 = matched entities only,
+            2 = also entities adjacent to a match, weight ×0.5).
+    """
+    enabled: bool
+    storage_dir: str
+    top_k: int
+    max_hops: int
+
+
+@dataclass(frozen=True)
 class IngestionSettings:
     chunk_size: int
     chunk_overlap: int
@@ -190,6 +225,8 @@ class Settings:
     observability: ObservabilitySettings
     ingestion: Optional[IngestionSettings] = None
     vision_llm: Optional[VisionLLMSettings] = None
+    response: Optional[ResponseSettings] = None
+    graph: Optional[GraphSettings] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Settings":
@@ -230,6 +267,28 @@ class Settings:
                 deployment_name=vision_llm.get("deployment_name"),
                 base_url=vision_llm.get("base_url"),
                 max_tokens=vision_llm.get("max_tokens"),
+            )
+
+        response_settings = None
+        if "response" in data:
+            response = _require_mapping(data, "response", "settings")
+            response_settings = ResponseSettings(
+                confidence_enabled=_require_bool(
+                    response, "confidence_enabled", "response"
+                ),
+                confidence_threshold=_require_number(
+                    response, "confidence_threshold", "response"
+                ),
+            )
+
+        graph_settings = None
+        if "graph" in data:
+            graph = _require_mapping(data, "graph", "settings")
+            graph_settings = GraphSettings(
+                enabled=_require_bool(graph, "enabled", "graph"),
+                storage_dir=_require_str(graph, "storage_dir", "graph"),
+                top_k=_require_int(graph, "top_k", "graph"),
+                max_hops=_require_int(graph, "max_hops", "graph"),
             )
 
         settings = cls(
@@ -284,6 +343,8 @@ class Settings:
             ),
             ingestion=ingestion_settings,
             vision_llm=vision_llm_settings,
+            response=response_settings,
+            graph=graph_settings,
         )
 
         return settings

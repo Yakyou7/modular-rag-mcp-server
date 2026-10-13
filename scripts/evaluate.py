@@ -127,14 +127,27 @@ def main() -> int:
             )
             sparse_retriever.default_collection = collection
 
+            # Optional third recall path (GraphRAG): attached when enabled
+            # in settings; degrades silently when the index is missing.
+            try:
+                from src.core.query_engine.graph_retriever import create_graph_retriever
+                graph_retriever = create_graph_retriever(
+                    settings, collection, vector_store=vector_store,
+                )
+            except Exception as exc:
+                print(f"⚠️  Graph retriever unavailable: {exc}")
+                graph_retriever = None
+
             query_processor = QueryProcessor()
             hybrid_search = create_hybrid_search(
                 settings=settings,
                 query_processor=query_processor,
                 dense_retriever=dense_retriever,
                 sparse_retriever=sparse_retriever,
+                graph_retriever=graph_retriever,
             )
-            print(f"✅ HybridSearch initialized for collection: {collection}")
+            print(f"✅ HybridSearch initialized for collection: {collection}"
+                  + ("" if graph_retriever is None else " (+graph path)"))
         except Exception as exc:
             print(f"⚠️  Failed to initialize search (running without retrieval): {exc}")
 

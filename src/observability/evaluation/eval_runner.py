@@ -227,7 +227,7 @@ class EvalRunner:
             test_set_path=str(test_set_path),
         )
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         for idx, tc in enumerate(test_cases):
             logger.info("Evaluating [%d/%d]: %s", idx + 1, len(test_cases), tc.query[:60])
@@ -239,7 +239,7 @@ class EvalRunner:
             )
             report.query_results.append(qr)
 
-        report.total_elapsed_ms = (time.monotonic() - t0) * 1000.0
+        report.total_elapsed_ms = (time.perf_counter() - t0) * 1000.0
         report.aggregate_metrics = self._aggregate_metrics(report.query_results)
 
         logger.info(
@@ -269,7 +269,7 @@ class EvalRunner:
         Returns:
             QueryResult with metrics for this test case.
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         qr = QueryResult(query=test_case.query)
 
         # Step 1: Retrieve chunks
@@ -305,7 +305,7 @@ class EvalRunner:
             logger.warning("Evaluation failed for '%s': %s", test_case.query[:40], exc)
             qr.metrics = {}
 
-        qr.elapsed_ms = (time.monotonic() - t0) * 1000.0
+        qr.elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return qr
 
     def _retrieve(

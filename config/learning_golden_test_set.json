@@ -1,6 +1,6 @@
 {
-  "description": "针对 learning_docs 集合（《大语言模型应用开发技术指南》）的黄金测试集。expected_chunk_ids 为摄取后验证过的真实块 ID。",
-  "version": "1.0",
+  "description": "针对 learning_docs 集合（《大语言模型应用开发技术指南》）的黄金测试集。expected_chunk_ids 为摄取后验证过的真实块 ID（v2: 从 5 条扩容到 40 条，覆盖全部 12 个块，含概念/关键词/对比/表格/跨语言等查询形态）。",
+  "version": "2.0",
   "test_cases": [
     {
       "query": "重排序有哪些方案？各自的特点是什么？",
@@ -24,13 +24,223 @@
       "query": "MCP 协议是什么？它解决什么问题？",
       "expected_chunk_ids": ["c2bca2af_0008_6b3d251e"],
       "expected_sources": [],
-      "reference_answer": "MCP（Model Context Protocol）是 Anthropic 提出的标准化 AI 模型与外部工具交互的协议，让 AI 助手能以统一方式连接外部工具和数据源。"
+      "reference_answer": "MCP（Model Context Protocol）是 Anthropic 提出的标准化 AI 模型与外部工具交互的协议，定义了工具发现（tools/list）与工具调用（tools/call）等接口标准，让 AI 助手能以统一方式连接外部工具和数据源。"
     },
     {
       "query": "生产环境部署 RAG 要考虑什么？缓存策略怎么做？",
       "expected_chunk_ids": ["c2bca2af_0010_6d57f8f9"],
       "expected_sources": [],
       "reference_answer": "生产部署需考虑服务可用性、响应延迟、数据安全和成本控制。缓存方面可采用语义缓存：将查询向量与历史查询相似度匹配，超过阈值直接返回缓存结果，避免重复的嵌入计算和 LLM 调用。"
+    },
+    {
+      "query": "RAG 是什么技术？它是怎么缓解大模型幻觉问题的？",
+      "expected_chunk_ids": ["c2bca2af_0002_a4ed7377"],
+      "expected_sources": [],
+      "reference_answer": "RAG（Retrieval-Augmented Generation）将信息检索与文本生成相结合，在生成时引入知识库中的相关文档片段，显著减少 LLM 的幻觉问题，并使模型能回答训练数据范围之外的实时性问题。"
+    },
+    {
+      "query": "Naive RAG 和 Advanced RAG 有什么区别？",
+      "expected_chunk_ids": ["c2bca2af_0002_a4ed7377"],
+      "expected_sources": [],
+      "reference_answer": "Naive RAG 采用最简单的「检索-拼接-生成」流程，检索质量受限于单一向量相似度、缺乏重排序、无法处理多跳推理；Advanced RAG 在此基础上引入查询改写、混合检索、重排序和文档分块优化。"
+    },
+    {
+      "query": "Advanced RAG 在 Naive RAG 基础上引入了哪些优化手段？",
+      "expected_chunk_ids": ["c2bca2af_0002_a4ed7377", "c2bca2af_0003_6ac533c9"],
+      "expected_sources": [],
+      "reference_answer": "引入了查询改写（Query Rewriting）、混合检索（Dense + Sparse）、重排序（Cross-Encoder 或 LLM）以及文档分块优化（Smart Chunking + Metadata Enrichment）。"
+    },
+    {
+      "query": "什么是 Modular RAG？设计理念是什么？",
+      "expected_chunk_ids": ["c2bca2af_0003_6ac533c9"],
+      "expected_sources": [],
+      "reference_answer": "Modular RAG 将 RAG 流程分解为可独立替换的模块（Loader → Splitter → Transformer → Embedder → Vector Store → Retriever → Reranker → Generator），每个模块定义抽象接口，通过工厂模式和配置文件实例化，实现「乐高积木式」灵活组合。"
+    },
+    {
+      "query": "如何做到不修改代码就能切换 LLM Provider？",
+      "expected_chunk_ids": ["c2bca2af_0003_6ac533c9"],
+      "expected_sources": [],
+      "reference_answer": "通过工厂模式 + 配置文件驱动：模块定义抽象接口后，只需在 settings.yaml 中修改配置即可一键切换 LLM Provider（Azure / DeepSeek / Ollama）、Embedding 模型、Reranker 策略，便于 A/B 测试和技术选型。"
+    },
+    {
+      "query": "RAG 流水线从头到尾包含哪些模块？",
+      "expected_chunk_ids": ["c2bca2af_0003_6ac533c9"],
+      "expected_sources": [],
+      "reference_answer": "Loader → Splitter → Transformer → Embedder → Vector Store → Retriever → Reranker → Generator，每个模块定义抽象接口并可独立替换。"
+    },
+    {
+      "query": "文档分块过大会带来什么问题？",
+      "expected_chunk_ids": ["c2bca2af_0004_512d67fb"],
+      "expected_sources": [],
+      "reference_answer": "分块过大会导致检索噪声增加、LLM 上下文利用率下降，影响检索质量。"
+    },
+    {
+      "query": "常见的文档分块方法有哪些？分别适用于什么场景？",
+      "expected_chunk_ids": ["c2bca2af_0004_512d67fb"],
+      "expected_sources": [],
+      "reference_answer": "固定长度切分（按字符/Token 等分，适合结构简单纯文本）、递归字符切分（按分隔符优先级递归，通用文档推荐）、语义分块（基于 Embedding 相似度判断边界，适合长文档主题多变）、Markdown 切分（按标题层级，适合技术文档）。"
+    },
+    {
+      "query": "语义分块是怎么确定切分边界的？",
+      "expected_chunk_ids": ["c2bca2af_0004_512d67fb"],
+      "expected_sources": [],
+      "reference_answer": "语义分块基于 Embedding 相似度判断边界，适合长文档、主题多变的场景。"
+    },
+    {
+      "query": "Chunk Refiner 是做什么的？",
+      "expected_chunk_ids": ["c2bca2af_0005_c059ea92"],
+      "expected_sources": [],
+      "reference_answer": "原始切分后的 Chunk 可能存在截断不自然、缺乏上下文的问题；Chunk Refiner 利用 LLM 对文本改写润色，使其更加自包含、语义完整。"
+    },
+    {
+      "query": "元信息增强（Metadata Enrichment）生成哪些字段？检索时有什么用？",
+      "expected_chunk_ids": ["c2bca2af_0005_c059ea92"],
+      "expected_sources": [],
+      "reference_answer": "Metadata Enricher 为每个 Chunk 生成 title、summary 和 tags 元信息，在检索阶段可用于辅助过滤和排序。"
+    },
+    {
+      "query": "系统怎么实现用文字搜索图片的跨模态检索？",
+      "expected_chunk_ids": ["c2bca2af_0005_c059ea92"],
+      "expected_sources": [],
+      "reference_answer": "系统提取 PDF 中的嵌入图片，调用 Vision LLM 生成中文图片描述（Image Caption），将描述文本注入对应 Chunk 的 metadata，从而实现跨模态检索——用户用文字查询即可找到相关图表和图片。"
+    },
+    {
+      "query": "向量检索的原理是什么？常用的 Embedding 模型有哪些？",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "向量检索（Dense Retrieval）将文本编码为高维稠密向量，用余弦相似度或内积计算语义相似性。常用模型包括 OpenAI text-embedding-ada-002（1536 维）、BGE 系列（768/1024 维）等。"
+    },
+    {
+      "query": "BM25 的原理是什么？哪些场景下它比纯语义检索更好用？",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "BM25 是经典概率检索模型，基于词频（TF）和逆文档频率（IDF）计算相关性。它对精确关键词匹配非常有效，在专有名词、错别字等场景下表现优于纯语义检索。"
+    },
+    {
+      "query": "rank_bm25 jieba 中文分词",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "本项目使用 jieba 分词 + rank_bm25 库实现中文 BM25 检索。"
+    },
+    {
+      "query": "RRF 融合算法的公式是什么？平滑常数 k 默认取值多少？",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "RRF（Reciprocal Rank Fusion）公式为 score(d) = Σ 1/(k + rank_i(d))，k 为平滑常数（默认 60），rank_i(d) 是文档在第 i 个排名列表中的位置。"
+    },
+    {
+      "query": "为什么 RRF 能直接融合不同检索方法的结果？",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "因为 RRF 只使用排名而不依赖原始分数的量纲，所以可以直接融合向量检索、BM25 等打分体系完全不同的检索方法的排名结果。"
+    },
+    {
+      "query": "ChromaDB 是什么？有什么特点？",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "ChromaDB 是轻量级开源向量数据库，支持 Embedding 存储、元数据过滤和近似最近邻（ANN）搜索。本项目使用其持久化模式，数据保存在本地 SQLite 文件中，适合个人项目和中小规模应用。"
+    },
+    {
+      "query": "Bi-Encoder 和 Cross-Encoder 有什么区别？RAG 中如何分工？",
+      "expected_chunk_ids": ["c2bca2af_0007_39458ab2"],
+      "expected_sources": [],
+      "reference_answer": "Bi-Encoder（双塔）将查询和文档分别编码为独立向量，用余弦相似度匹配，速度快但精度有限；Cross-Encoder 将查询和文档拼接后同时输入模型，通过注意力机制捕捉细粒度交互，精度更高但更慢。RAG 中通常 Bi-Encoder 做粗排、Cross-Encoder 做精排。"
+    },
+    {
+      "query": "Hit Rate 和 MRR 这两个检索指标分别是什么含义？",
+      "expected_chunk_ids": ["c2bca2af_0007_39458ab2"],
+      "expected_sources": [],
+      "reference_answer": "Hit Rate：Top-K 结果中是否包含正确文档（二值指标）；MRR：正确文档首次出现位置的倒数，衡量命中的排名质量。"
+    },
+    {
+      "query": "Faithfulness 指标衡量的是什么？",
+      "expected_chunk_ids": ["c2bca2af_0007_39458ab2"],
+      "expected_sources": [],
+      "reference_answer": "Faithfulness 是 Ragas 生成指标，衡量生成的答案是否忠实于检索到的上下文。"
+    },
+    {
+      "query": "什么是 Agent？它和普通的 RAG 查询有什么不同？",
+      "expected_chunk_ids": ["c2bca2af_0008_6b3d251e"],
+      "expected_sources": [],
+      "reference_answer": "Agent 是能自主规划任务、调用外部工具完成复杂目标的 AI 系统。与简单 RAG 查询不同，Agent 可根据指令自动分解任务、选择合适工具（搜索引擎、计算器、代码执行器等），迭代执行直到获得满意结果。"
+    },
+    {
+      "query": "MCP 协议定义了哪些接口标准？",
+      "expected_chunk_ids": ["c2bca2af_0008_6b3d251e"],
+      "expected_sources": [],
+      "reference_answer": "MCP 定义了工具发现（tools/list）、工具调用（tools/call）等接口标准，是 Anthropic 提出的 AI 模型与外部工具交互的标准化协议。"
+    },
+    {
+      "query": "query_knowledge_hub list_collections get_document_summary",
+      "expected_chunk_ids": ["c2bca2af_0008_6b3d251e"],
+      "expected_sources": [],
+      "reference_answer": "这三个是本项目 MCP Server 暴露的工具，可被 VS Code Copilot 或 Claude Desktop 直接调用。"
+    },
+    {
+      "query": "ReAct 模式的工作流程是怎样的？它有什么好处？",
+      "expected_chunk_ids": ["c2bca2af_0009_ed15e9e8", "c2bca2af_0008_6b3d251e"],
+      "expected_sources": [],
+      "reference_answer": "ReAct（Reasoning + Acting）将推理与行动交替进行：LLM 先推理思考（Thought），再选择行动（Action），观察行动结果（Observation），循环往复直到得出最终答案。这种模式使 Agent 的决策过程更加透明、可调试。"
+    },
+    {
+      "query": "Transformer 架构出自哪篇论文？核心组件有哪些？",
+      "expected_chunk_ids": ["c2bca2af_0001_f326b06b"],
+      "expected_sources": [],
+      "reference_answer": "Transformer 由 Vaswani 等人 2017 年提出（Attention Is All You Need），核心组件包括多头自注意力机制、前馈神经网络（FFN）、层归一化和残差连接。LLM 通常只用 Decoder 部分，通过因果注意力掩码实现自回归生成。"
+    },
+    {
+      "query": "注意力机制的计算公式是什么？Q、K、V 代表什么？",
+      "expected_chunk_ids": ["c2bca2af_0001_f326b06b"],
+      "expected_sources": [],
+      "reference_answer": "Attention(Q,K,V) = softmax(QK^T / √d_k) V，其中 Q、K、V 分别代表查询、键、值矩阵，d_k 为键向量维度。多头注意力将输入投影到 h 个不同子空间并行计算注意力后拼接输出。"
+    },
+    {
+      "query": "常见的子词分词算法有哪些？中文分词对 RAG 的 Chunk 大小设计有什么影响？",
+      "expected_chunk_ids": ["c2bca2af_0001_f326b06b"],
+      "expected_sources": [],
+      "reference_answer": "常见子词分词算法包括 BPE（Byte Pair Encoding）、WordPiece 和 SentencePiece。中文场景下 BPE 通常将每个汉字作为一个或多个 Token，中文文本的 Token 数往往多于等长英文文本，对 RAG 系统的 Chunk 大小设计有直接影响。"
+    },
+    {
+      "query": "大语言模型相比传统 NLP 方法有哪些优势？",
+      "expected_chunk_ids": ["c2bca2af_0001_f326b06b"],
+      "expected_sources": [],
+      "reference_answer": "强大的上下文理解能力（处理长文档和复杂指令）、Few-shot 和 Zero-shot 学习能力（无需大量标注数据）、跨任务泛化能力（同一模型完成翻译、摘要、QA 等）、支持多轮对话和思维链推理。"
+    },
+    {
+      "query": "语义缓存为什么能显著降低延迟和成本？",
+      "expected_chunk_ids": ["c2bca2af_0010_6d57f8f9"],
+      "expected_sources": [],
+      "reference_answer": "对重复或相似查询，将查询向量与缓存库中的历史查询做相似度匹配，超过阈值则直接返回缓存结果，避免重复的 Embedding 计算和 LLM 调用，从而显著降低延迟和成本。"
+    },
+    {
+      "query": "为什么说 Embedding 和 LLM 调用是 RAG 链路中最耗时的环节？怎么优化？",
+      "expected_chunk_ids": ["c2bca2af_0010_6d57f8f9"],
+      "expected_sources": [],
+      "reference_answer": "通过批量 Embedding（多个 Chunk 合并为一次 API 调用）和异步并发（asyncio ThreadPool）可以大幅提升数据摄取和查询吞吐量，本项目的组件实现了可配置的批量大小和并发度。"
+    },
+    {
+      "query": "生产系统的可观测性是怎么做的？",
+      "expected_chunk_ids": ["c2bca2af_0011_2c315cfe", "c2bca2af_0010_6d57f8f9"],
+      "expected_sources": [],
+      "reference_answer": "通过结构化日志（JSON Lines）、全链路 Trace（记录每个阶段的输入/输出/耗时）和 Streamlit Dashboard 三位一体实现可视化监控；每次摄取和查询操作都会自动生成 Trace 记录，便于问题排查和性能分析。"
+    },
+    {
+      "query": "这本手册的作者是谁？是什么版本？",
+      "expected_chunk_ids": ["c2bca2af_0000_9f123156"],
+      "expected_sources": [],
+      "reference_answer": "作者为 Modular RAG 项目组，版本 v1.0（2026 年 2 月），分类为内部技术文档。"
+    },
+    {
+      "query": "这份文档一共包含哪几个章节？",
+      "expected_chunk_ids": ["c2bca2af_0000_9f123156"],
+      "expected_sources": [],
+      "reference_answer": "七章：大语言模型基础概念、检索增强生成（RAG）架构设计、文档分块策略详解、向量检索与混合搜索、重排序机制与评估方法、Agent 与工具调用、生产部署与性能优化。"
+    },
+    {
+      "query": "What is Reciprocal Rank Fusion and what is the default smoothing constant k?",
+      "expected_chunk_ids": ["c2bca2af_0006_b2a9cbd6"],
+      "expected_sources": [],
+      "reference_answer": "Reciprocal Rank Fusion (RRF) combines ranked lists with score(d) = Σ 1/(k + rank_i(d)); the default smoothing constant k is 60. It works across retrieval methods because it relies only on ranks, not raw score scales."
     }
   ]
 }
